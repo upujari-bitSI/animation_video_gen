@@ -5,24 +5,19 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-import anthropic
 from rich.console import Console
 
-from config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MAX_TOKENS
+from config import OLLAMA_HOST, OLLAMA_MODEL
 from .models import PipelineState
 
 console = Console()
 
 
 class BaseAgent(ABC):
-    """Base class for all pipeline agents."""
+    """Base class for all pipeline agents. Uses Ollama (local LLM) for reasoning."""
 
     name: str = "BaseAgent"
     color: str = "white"
-
-    def __init__(self) -> None:
-        self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        self.model = ANTHROPIC_MODEL
 
     # ------------------------------------------------------------------ #
     # Public interface                                                      #
@@ -49,50 +44,68 @@ class BaseAgent(ABC):
         ...
 
     # ------------------------------------------------------------------ #
-    # Helpers                                                               #
+    # LLM call via Ollama                                                   #
     # ------------------------------------------------------------------ #
 
     def _call_llm(
         self,
         system_prompt: str,
         user_message: str,
-        max_tokens: int = MAX_TOKENS,
         retries: int = 3,
     ) -> str:
-        """Call Claude with retry logic and prompt caching on the system prompt."""
+        """Call a local Ollama model and return the response text."""
+        import ollama
+
+        client = ollama.Client(host=OLLAMA_HOST)
+
         for attempt in range(retries):
             try:
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=max_tokens,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                            "cache_control": {"type": "ephemeral"},
-                        }
+                response = client.chat(
+                    model=OLLAMA_MODEL,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_message},
                     ],
-                    messages=[{"role": "user", "content": user_message}],
+                    format="json",
+                    options={"temperature": 0.7, "num_ctx": 8192},
                 )
-                return response.content[0].text
-            except anthropic.RateLimitError:
-                wait = 2 ** attempt
-                console.print(f"[yellow]Rate limit hit, retrying in {wait}s…[/yellow]")
-                time.sleep(wait)
-            except anthropic.APIError as exc:
+                return response.message.content
+            except Exception as exc:
+                err = str(exc)
+                if "connection" in err.lower() or "refused" in err.lower():
+                    raise RuntimeError(
+                        f"Cannot reach Ollama at {OLLAMA_HOST}.\n"
+                        "  → Start it with: ollama serve\n"
+                        f"  → Then pull the model: ollama pull {OLLAMA_MODEL}"
+                    ) from exc
                 if attempt == retries - 1:
-                    raise
-                time.sleep(2 ** attempt)
-                console.print(f"[yellow]API error ({exc}), retrying…[/yellow]")
-        raise RuntimeError(f"{self.name}: LLM call failed after {retries} retries")
+                    raise RuntimeError(f"Ollama call failed after {retries} tries: {exc}") from exc
+                wait = 2 ** attempt
+                console.print(f"[yellow]  Retry {attempt+1}/{retries} in {wait}s…[/yellow]")
+                time.sleep(wait)
+
+        raise RuntimeError("LLM call failed")  # unreachable, satisfies type checker
+
+    # ------------------------------------------------------------------ #
+    # JSON parsing helper                                                   #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _extract_json(text: str) -> Any:
-        """Extract the first JSON object or array from a text response."""
+        """Extract the first JSON object/array from a text response."""
+        # Markdown code block
         match = re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
         if match:
             return json.loads(match.group(1))
+        # Bare JSON object or array
         match = re.search(r"(\{[\s\S]+\}|\[[\s\S]+\])", text)
         if match:
             return json.loads(match.group(1))
-        raise ValueError("No JSON found in LLM response")
+        # Whole text is JSON (Ollama format=json path)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            raise ValueError(
+                f"No JSON found in LLM response.\n"
+                f"First 300 chars: {text[:300]}"
+            )

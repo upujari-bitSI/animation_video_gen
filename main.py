@@ -1,10 +1,11 @@
 """
-Animation Video Generator — Multi-Agent Pipeline
-================================================
+Animation Video Generator — Multi-Agent Pipeline (local models)
+===============================================================
 Usage:
     python main.py "A small star learns to shine despite being afraid"
     python main.py --prompt "A brave kitten saves the forest" --output result.json
     python main.py --interactive
+    python main.py --example
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt
 
-from config import ANTHROPIC_API_KEY
+from config import OLLAMA_HOST, OLLAMA_MODEL
 from core.orchestrator import Orchestrator
 
 console = Console()
@@ -25,15 +26,18 @@ EXAMPLE_PROMPT = "A small star learns to shine despite being afraid"
 
 
 def run(prompt: str, output_path: str | None = None) -> dict:
-    if not ANTHROPIC_API_KEY:
-        console.print(
-            "[bold red]Error:[/bold red] ANTHROPIC_API_KEY not set.\n"
-            "Copy .env.example → .env and add your key."
-        )
-        sys.exit(1)
+    console.print(
+        f"[dim]LLM : {OLLAMA_MODEL} @ {OLLAMA_HOST}[/dim]\n"
+        "[dim]Make sure Ollama is running: [bold]ollama serve[/bold][/dim]"
+    )
 
     orchestrator = Orchestrator()
     state = orchestrator.run(prompt)
+
+    if state.output_video_path:
+        console.print(
+            f"\n[bold green]Final video:[/bold green] {state.output_video_path}"
+        )
 
     result = state.model_dump()
 

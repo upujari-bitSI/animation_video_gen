@@ -1,45 +1,17 @@
 """
 Agent 5 — Asset Generation Agent
 
-Input : VisualPromptPack
-Output: GeneratedAssetPack stored in state
+Generates one PNG image per scene using a local Stable Diffusion model.
+Images are saved to output/assets/scene_<N>.png.
 
-NOTE: This agent is a structured stub.  In production, replace the
-      `_generate_asset` method body with real calls to:
-        - Image:      Stability AI / DALL·E / Midjourney API
-        - Video clip: Sora / Runway Gen-3 / Pika Labs API
-      The agent uses the LLM to plan the generation strategy and
-      then simulates the asset creation with plausible file paths.
+To switch models, set SD_MODEL_ID in .env:
+  - runwayml/stable-diffusion-v1-5      (default, ~4 GB VRAM)
+  - stabilityai/stable-diffusion-xl-base-1.0  (higher quality, ~8 GB VRAM)
 """
+from config import ASSETS_DIR, SD_DEVICE, SD_HEIGHT, SD_MODEL_ID, SD_STEPS, SD_WIDTH
 from core.base_agent import BaseAgent
 from core.models import GeneratedAsset, GeneratedAssetPack, PipelineState
-
-SYSTEM_PROMPT = """You are an AI asset generation coordinator for animation production.
-Given visual prompts for each scene, produce a structured asset generation plan
-and simulate the output file paths that would be created.
-
-Return ONLY a JSON object with this exact schema:
-{
-  "assets": [
-    {
-      "scene_number": integer,
-      "asset_type": "image or video_clip",
-      "file_path": "string (e.g. assets/scene_01.png or assets/scene_01.mp4)",
-      "generation_model": "string (e.g. stable-diffusion-xl, dall-e-3, runway-gen3)",
-      "prompt_used": "string (the final prompt sent to the model)",
-      "status": "stub",
-      "notes": "string (any generation notes)"
-    }
-  ],
-  "total_scenes": integer,
-  "generation_summary": "string"
-}
-
-Rules:
-- Use video_clip for scenes with significant movement; image for static/pan scenes.
-- Recommend the best model for each scene's complexity.
-- Keep file_path convention: assets/scene_<zero-padded-number>.<ext>
-"""
+from utils.image_generator import generate_image, resolve_device
 
 
 class AssetGenerationAgent(BaseAgent):
@@ -48,22 +20,56 @@ class AssetGenerationAgent(BaseAgent):
 
     def _execute(self, state: PipelineState) -> PipelineState:
         if not state.visual_prompt_pack:
-            raise ValueError("VisualPromptPack required")
+            raise ValueError("VisualPromptPack required — run VisualPromptAgent first")
 
-        prompts_data = [p.model_dump() for p in state.visual_prompt_pack.prompts]
-        user_msg = (
-            f"Plan asset generation for {len(prompts_data)} scenes.\n\n"
-            f"Style: {state.visual_prompt_pack.animation_style}\n"
-            f"Global guide: {state.visual_prompt_pack.global_style_guide}\n\n"
-            f"Visual prompts:\n{prompts_data}"
-        )
+        device = resolve_device(SD_DEVICE)
+        assets = []
 
-        raw = self._call_llm(system_prompt=SYSTEM_PROMPT, user_message=user_msg)
-        data = self._extract_json(raw)
-        assets = [GeneratedAsset(**a) for a in data["assets"]]
+        for vp in state.visual_prompt_pack.prompts:
+            out_path = str(ASSETS_DIR / f"scene_{vp.scene_number:02d}.png")
+
+            full_prompt = (
+                f"{state.visual_prompt_pack.animation_style}, "
+                f"{vp.image_generation_prompt}, "
+                f"lighting: {vp.lighting}, "
+                f"color palette: {vp.color_palette}, "
+                f"high quality, detailed, professional animation, 4k"
+            )
+
+            try:
+                generate_image(
+                    prompt=full_prompt,
+                    output_path=out_path,
+                    model_id=SD_MODEL_ID,
+                    device=device,
+                    width=SD_WIDTH,
+                    height=SD_HEIGHT,
+                    steps=SD_STEPS,
+                )
+                status = "generated"
+                notes = f"device={device}, steps={SD_STEPS}"
+            except Exception as exc:
+                status = "failed"
+                notes = str(exc)
+                out_path = ""
+
+            assets.append(GeneratedAsset(
+                scene_number=vp.scene_number,
+                asset_type="image",
+                file_path=out_path,
+                generation_model=SD_MODEL_ID,
+                prompt_used=full_prompt,
+                status=status,
+                notes=notes,
+            ))
+
+        generated_count = sum(1 for a in assets if a.status == "generated")
         state.generated_asset_pack = GeneratedAssetPack(
             assets=assets,
-            total_scenes=data["total_scenes"],
-            generation_summary=data["generation_summary"],
+            total_scenes=len(assets),
+            generation_summary=(
+                f"Generated {generated_count}/{len(assets)} images "
+                f"using {SD_MODEL_ID} on {device}"
+            ),
         )
         return state

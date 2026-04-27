@@ -1,4 +1,26 @@
-anthropic>=0.40.0
+# ── LLM ──────────────────────────────────────────────────────────────────────
+# Install Ollama separately: https://ollama.com/download
+ollama>=0.3.0
+
+# ── Image Generation (Stable Diffusion, local) ───────────────────────────────
+torch>=2.0.0
+diffusers>=0.27.0
+transformers>=4.38.0
+accelerate>=0.28.0
+Pillow>=10.0.0
+
+# ── TTS (pyttsx3 = zero-download, uses OS voice engine) ──────────────────────
+pyttsx3>=2.90
+# Optional higher-quality TTS — uncomment to use Coqui:
+# TTS>=0.22.0
+
+# ── Video Composition ────────────────────────────────────────────────────────
+moviepy>=1.0.3
+imageio>=2.34.0
+imageio-ffmpeg>=0.4.9        # bundles ffmpeg — no separate install needed
+
+# ── Core ─────────────────────────────────────────────────────────────────────
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 rich>=13.0.0
+numpy>=1.24.0

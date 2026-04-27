@@ -91,6 +91,7 @@ class AudioCue(BaseModel):
     timing_start_seconds: float
     timing_end_seconds: float
     sound_effects: List[str]
+    audio_file_path: Optional[str] = None   # set by VoiceoverAudioAgent after TTS
 
 
 class AudioPlan(BaseModel):
@@ -154,5 +155,6 @@ class PipelineState(BaseModel):
     qc_report: Optional[QCReport] = None
     qc_retry_count: int = 0
     status: str = "pending"
+    output_video_path: Optional[str] = None   # set by AnimationCompositionAgent
     completed_stages: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
