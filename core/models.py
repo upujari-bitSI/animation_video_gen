@@ -40,9 +40,9 @@ class Scene(BaseModel):
     description: str
     characters_present: List[str]
     actions: str
-    camera_angle: str
-    setting: str
-    mood: str
+    camera_angle: str = "medium shot"
+    setting: str = ""
+    mood: str = "neutral"
     dialogue: Optional[str] = None
 
 
@@ -55,11 +55,11 @@ class SceneBreakdown(BaseModel):
 class VisualPrompt(BaseModel):
     scene_number: int
     image_generation_prompt: str
-    style_notes: str
-    lighting: str
-    color_palette: str
-    character_consistency_notes: str
-    environment_details: str
+    style_notes: str = ""
+    lighting: str = "natural lighting"
+    color_palette: str = "vibrant"
+    character_consistency_notes: str = ""
+    environment_details: str = ""
 
 
 class VisualPromptPack(BaseModel):
@@ -87,10 +87,10 @@ class GeneratedAssetPack(BaseModel):
 class AudioCue(BaseModel):
     scene_number: int
     narration_text: str
-    voice_style: str
-    timing_start_seconds: float
-    timing_end_seconds: float
-    sound_effects: List[str]
+    voice_style: str = "neutral"
+    timing_start_seconds: float = 0.0
+    timing_end_seconds: float = 5.0
+    sound_effects: List[str] = []
     audio_file_path: Optional[str] = None   # set by VoiceoverAudioAgent after TTS
 
 
