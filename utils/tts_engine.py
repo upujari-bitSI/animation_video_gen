@@ -42,14 +42,15 @@ def synthesize(
 def _pyttsx3(text: str, output_path: str, rate: int) -> str:
     import pyttsx3
 
+    # Re-init every call: Windows SAPI5 driver leaks state across save_to_file calls
     engine = pyttsx3.init()
-    engine.setProperty("rate",   rate)
-    engine.setProperty("volume", 0.9)
-
-    # pyttsx3 needs the path as a string with forward slashes on all platforms
-    engine.save_to_file(text, str(Path(output_path)))
-    engine.runAndWait()
-    engine.stop()
+    try:
+        engine.setProperty("rate",   rate)
+        engine.setProperty("volume", 0.9)
+        engine.save_to_file(text, str(Path(output_path).resolve()))
+        engine.runAndWait()
+    finally:
+        engine.stop()
     return output_path
 
 
