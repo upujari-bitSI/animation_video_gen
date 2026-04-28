@@ -86,12 +86,12 @@ class GeneratedAssetPack(BaseModel):
 
 class AudioCue(BaseModel):
     scene_number: int
-    narration_text: str
+    narration_text: str = ""
     voice_style: str = "neutral"
     timing_start_seconds: float = 0.0
     timing_end_seconds: float = 5.0
     sound_effects: List[str] = []
-    audio_file_path: Optional[str] = None   # set by VoiceoverAudioAgent after TTS
+    audio_file_path: Optional[str] = None
 
 
 class AudioPlan(BaseModel):
