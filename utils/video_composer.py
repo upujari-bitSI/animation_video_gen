@@ -9,6 +9,11 @@ stitches them into a single MP4 with:
 """
 from __future__ import annotations
 
+import PIL.Image
+# PIL.Image.ANTIALIAS was removed in Pillow 10.x; MoviePy 1.x still uses it
+if not hasattr(PIL.Image, "ANTIALIAS"):
+    PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
+
 from pathlib import Path
 from typing import List, Optional, Tuple
 

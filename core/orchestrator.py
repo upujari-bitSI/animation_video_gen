@@ -1,12 +1,17 @@
 from __future__ import annotations
+import json
+from pathlib import Path
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from config import MAX_QC_RETRIES
+from config import MAX_QC_RETRIES, OUTPUT_DIR
 from .models import PipelineState
 
 console = Console()
+
+STATE_FILE = OUTPUT_DIR / "pipeline_state.json"
 
 
 class Orchestrator:
@@ -19,10 +24,12 @@ class Orchestrator:
         → AnimationComposition → QualityControl
                                       ↓ (fail, retry)
                               AnimationComposition
+
+    State is saved to output/pipeline_state.json after every agent so
+    the run can be resumed with --resume if it crashes mid-way.
     """
 
     def __init__(self) -> None:
-        # Import here to avoid circular dependencies at module load time.
         from agents.prompt_understanding_agent import PromptUnderstandingAgent
         from agents.story_generation_agent import StoryGenerationAgent
         from agents.scene_breakdown_agent import SceneBreakdownAgent
@@ -45,28 +52,43 @@ class Orchestrator:
         self.composition_agent = AnimationCompositionAgent()
 
     # ------------------------------------------------------------------ #
+    # Public interface                                                      #
+    # ------------------------------------------------------------------ #
 
-    def run(self, user_prompt: str) -> PipelineState:
-        state = PipelineState(user_prompt=user_prompt, status="running")
+    def run(self, user_prompt: str, resume: bool = False) -> PipelineState:
+        state = self._load_state(user_prompt) if resume else PipelineState(
+            user_prompt=user_prompt, status="running"
+        )
+        state.status = "running"
 
         console.print(
             Panel.fit(
                 f"[bold cyan]Animation Video Generator[/bold cyan]\n"
-                f"Prompt: [italic]{user_prompt}[/italic]",
+                f"Prompt: [italic]{user_prompt}[/italic]"
+                + (" [yellow](resuming)[/yellow]" if resume else ""),
                 border_style="cyan",
             )
         )
 
         # ── Main sequential pipeline ──────────────────────────────────── #
         for agent in self.pipeline:
+            if agent.name in state.completed_stages:
+                console.print(f"[dim]  ↷ Skipping {agent.name} (already done)[/dim]")
+                continue
             state = agent.run(state)
+            self._save_state(state)
             if state.status == "error":
-                console.print(f"[bold red]Pipeline halted at {agent.name}[/bold red]")
+                console.print(
+                    f"[bold red]Pipeline halted at {agent.name}[/bold red]\n"
+                    f"[yellow]Resume with:[/yellow] py main.py --resume"
+                )
                 return state
 
         # ── QC loop with retries ─────────────────────────────────────── #
         for attempt in range(MAX_QC_RETRIES + 1):
-            state = self.qc_agent.run(state)
+            if "QualityControlAgent" not in state.completed_stages or attempt > 0:
+                state = self.qc_agent.run(state)
+                self._save_state(state)
             if state.status == "error":
                 return state
 
@@ -79,14 +101,56 @@ class Orchestrator:
                     f"Re-running composition (attempt {attempt + 1}/{MAX_QC_RETRIES})…[/yellow]"
                 )
                 state.qc_retry_count += 1
+                state.completed_stages = [
+                    s for s in state.completed_stages
+                    if s not in ("AnimationCompositionAgent", "QualityControlAgent")
+                ]
                 state = self.composition_agent.run(state)
+                self._save_state(state)
                 if state.status == "error":
                     return state
 
         state.status = "completed"
+        self._save_state(state)
         self._print_summary(state)
         return state
 
+    # ------------------------------------------------------------------ #
+    # State persistence                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _save_state(self, state: PipelineState) -> None:
+        try:
+            STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STATE_FILE.write_text(
+                json.dumps(state.model_dump(), indent=2, default=str)
+            )
+        except Exception as exc:
+            console.print(f"[yellow]  Warning: could not save state: {exc}[/yellow]")
+
+    def _load_state(self, user_prompt: str) -> PipelineState:
+        if not STATE_FILE.exists():
+            console.print(
+                "[yellow]No saved state found — starting fresh.[/yellow]"
+            )
+            return PipelineState(user_prompt=user_prompt, status="running")
+        try:
+            data = json.loads(STATE_FILE.read_text())
+            state = PipelineState(**data)
+            done = ", ".join(state.completed_stages) or "none"
+            console.print(
+                f"[green]Resuming from saved state.[/green]\n"
+                f"  Completed stages: [cyan]{done}[/cyan]"
+            )
+            return state
+        except Exception as exc:
+            console.print(
+                f"[yellow]Could not load saved state ({exc}) — starting fresh.[/yellow]"
+            )
+            return PipelineState(user_prompt=user_prompt, status="running")
+
+    # ------------------------------------------------------------------ #
+    # Summary                                                               #
     # ------------------------------------------------------------------ #
 
     def _print_summary(self, state: PipelineState) -> None:
@@ -94,17 +158,12 @@ class Orchestrator:
         table.add_column("Stage", style="bold")
         table.add_column("Status")
 
-        stage_names = [
-            "PromptUnderstandingAgent",
-            "StoryGenerationAgent",
-            "SceneBreakdownAgent",
-            "VisualPromptAgent",
-            "AssetGenerationAgent",
-            "VoiceoverAudioAgent",
-            "AnimationCompositionAgent",
-            "QualityControlAgent",
-        ]
-        for name in stage_names:
+        for name in [
+            "PromptUnderstandingAgent", "StoryGenerationAgent",
+            "SceneBreakdownAgent", "VisualPromptAgent",
+            "AssetGenerationAgent", "VoiceoverAudioAgent",
+            "AnimationCompositionAgent", "QualityControlAgent",
+        ]:
             done = name in state.completed_stages
             table.add_row(name, "[green]✓[/green]" if done else "[red]✗[/red]")
 
@@ -131,5 +190,14 @@ class Orchestrator:
                     f"Render: [italic]{state.composition_plan.final_render_command}[/italic]",
                     title="Final Video Plan",
                     border_style="cyan",
+                )
+            )
+
+        if state.output_video_path:
+            console.print(
+                Panel(
+                    f"[bold green]{state.output_video_path}[/bold green]",
+                    title="Final Video",
+                    border_style="green",
                 )
             )

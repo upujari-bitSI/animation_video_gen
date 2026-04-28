@@ -3,9 +3,10 @@ Animation Video Generator — Multi-Agent Pipeline (local models)
 ===============================================================
 Usage:
     python main.py "A small star learns to shine despite being afraid"
-    python main.py --prompt "A brave kitten saves the forest" --output result.json
-    python main.py --interactive
+    python main.py --resume                  # continue a crashed run
     python main.py --example
+    python main.py --interactive
+    python main.py "prompt" --output result.json
 """
 from __future__ import annotations
 
@@ -18,31 +19,26 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from config import OLLAMA_HOST, OLLAMA_MODEL
-from core.orchestrator import Orchestrator
+from core.orchestrator import Orchestrator, STATE_FILE
 
 console = Console()
 
 EXAMPLE_PROMPT = "A small star learns to shine despite being afraid"
 
 
-def run(prompt: str, output_path: str | None = None) -> dict:
+def run(prompt: str, output_path: str | None = None, resume: bool = False) -> dict:
     console.print(
         f"[dim]LLM : {OLLAMA_MODEL} @ {OLLAMA_HOST}[/dim]\n"
         "[dim]Make sure Ollama is running: [bold]ollama serve[/bold][/dim]"
     )
 
     orchestrator = Orchestrator()
-    state = orchestrator.run(prompt)
-
-    if state.output_video_path:
-        console.print(
-            f"\n[bold green]Final video:[/bold green] {state.output_video_path}"
-        )
+    state = orchestrator.run(prompt, resume=resume)
 
     result = state.model_dump()
 
     if output_path:
-        Path(output_path).write_text(json.dumps(result, indent=2))
+        Path(output_path).write_text(json.dumps(result, indent=2, default=str))
         console.print(f"\n[green]Full pipeline state saved to:[/green] {output_path}")
 
     return result
@@ -76,10 +72,27 @@ def main() -> None:
         action="store_true",
         help=f'Run with the built-in example prompt: "{EXAMPLE_PROMPT}"',
     )
+    parser.add_argument(
+        "--resume", "-r",
+        action="store_true",
+        help=f"Resume a previous run from saved state ({STATE_FILE})",
+    )
 
     args = parser.parse_args()
 
-    if args.example:
+    # ── Resolve prompt ──────────────────────────────────────────────── #
+    if args.resume:
+        # Resume: load prompt from saved state if not provided
+        if STATE_FILE.exists():
+            import json as _json
+            saved = _json.loads(STATE_FILE.read_text())
+            prompt = args.prompt or args.prompt_flag or saved.get("user_prompt", "")
+        else:
+            prompt = args.prompt or args.prompt_flag or ""
+        if not prompt:
+            console.print("[red]No saved state found and no prompt provided.[/red]")
+            sys.exit(1)
+    elif args.example:
         prompt = EXAMPLE_PROMPT
     elif args.interactive:
         prompt = Prompt.ask("[bold cyan]Enter your animation prompt[/bold cyan]")
@@ -90,11 +103,14 @@ def main() -> None:
     else:
         parser.print_help()
         console.print(
-            f'\n[yellow]Tip:[/yellow] Try: python main.py "{EXAMPLE_PROMPT}"'
+            f'\n[yellow]Tips:[/yellow]\n'
+            f'  Run example : py main.py --example\n'
+            f'  Custom prompt: py main.py "your story here"\n'
+            f'  Resume crash : py main.py --resume'
         )
         sys.exit(0)
 
-    run(prompt.strip(), output_path=args.output)
+    run(prompt.strip(), output_path=args.output, resume=args.resume)
 
 
 if __name__ == "__main__":
