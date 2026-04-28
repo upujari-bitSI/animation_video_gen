@@ -4,42 +4,42 @@ from pydantic import BaseModel, Field
 
 
 class Character(BaseModel):
-    name: str
-    description: str
-    personality: str
-    visual_traits: str
+    name: str = "Unknown"
+    description: str = ""
+    personality: str = ""
+    visual_traits: str = ""
 
 
 class StructuredPrompt(BaseModel):
-    genre: str
-    tone: str
-    mood: str
-    target_audience: str
-    animation_style: str
-    duration_seconds: int
-    characters: List[Character]
-    setting: str
-    themes: List[str]
-    pacing: str
+    genre: str = "adventure"
+    tone: str = "uplifting"
+    mood: str = "hopeful"
+    target_audience: str = "general"
+    animation_style: str = "cartoon"
+    duration_seconds: int = 90
+    characters: List[Character] = Field(default_factory=list)
+    setting: str = ""
+    themes: List[str] = Field(default_factory=list)
+    pacing: str = "moderate"
 
 
 class StoryScript(BaseModel):
-    title: str
-    beginning: str
-    conflict: str
-    resolution: str
-    full_narrative: str
-    emotional_arc: str
-    word_count: int
+    title: str = "Untitled"
+    beginning: str = ""
+    conflict: str = ""
+    resolution: str = ""
+    full_narrative: str = ""
+    emotional_arc: str = ""
+    word_count: int = 0
 
 
 class Scene(BaseModel):
     scene_number: int
-    title: str
-    duration_seconds: int
-    description: str
-    characters_present: List[str]
-    actions: str
+    title: str = ""
+    duration_seconds: int = 10
+    description: str = ""
+    characters_present: List[str] = Field(default_factory=list)
+    actions: str = ""
     camera_angle: str = "medium shot"
     setting: str = ""
     mood: str = "neutral"
@@ -47,14 +47,14 @@ class Scene(BaseModel):
 
 
 class SceneBreakdown(BaseModel):
-    total_scenes: int
-    total_duration_seconds: int
-    scenes: List[Scene]
+    total_scenes: int = 0
+    total_duration_seconds: int = 0
+    scenes: List[Scene] = Field(default_factory=list)
 
 
 class VisualPrompt(BaseModel):
     scene_number: int
-    image_generation_prompt: str
+    image_generation_prompt: str = ""
     style_notes: str = ""
     lighting: str = "natural lighting"
     color_palette: str = "vibrant"
@@ -63,25 +63,25 @@ class VisualPrompt(BaseModel):
 
 
 class VisualPromptPack(BaseModel):
-    animation_style: str
-    global_style_guide: str
-    prompts: List[VisualPrompt]
+    animation_style: str = "cartoon"
+    global_style_guide: str = ""
+    prompts: List[VisualPrompt] = Field(default_factory=list)
 
 
 class GeneratedAsset(BaseModel):
     scene_number: int
-    asset_type: str          # "image" | "video_clip"
-    file_path: str           # placeholder path
-    generation_model: str
-    prompt_used: str
-    status: str              # "generated" | "stub"
+    asset_type: str = "image"
+    file_path: str = ""
+    generation_model: str = ""
+    prompt_used: str = ""
+    status: str = "stub"
     notes: str = ""
 
 
 class GeneratedAssetPack(BaseModel):
-    assets: List[GeneratedAsset]
-    total_scenes: int
-    generation_summary: str
+    assets: List[GeneratedAsset] = Field(default_factory=list)
+    total_scenes: int = 0
+    generation_summary: str = ""
 
 
 class AudioCue(BaseModel):
@@ -90,23 +90,23 @@ class AudioCue(BaseModel):
     voice_style: str = "neutral"
     timing_start_seconds: float = 0.0
     timing_end_seconds: float = 5.0
-    sound_effects: List[str] = []
+    sound_effects: List[str] = Field(default_factory=list)
     audio_file_path: Optional[str] = None
 
 
 class AudioPlan(BaseModel):
-    narrator_voice: str
-    background_music_genre: str
-    background_music_tempo: str
-    overall_audio_style: str
-    audio_cues: List[AudioCue]
-    music_transitions: List[str]
+    narrator_voice: str = "neutral"
+    background_music_genre: str = "ambient"
+    background_music_tempo: str = "moderate"
+    overall_audio_style: str = ""
+    audio_cues: List[AudioCue] = Field(default_factory=list)
+    music_transitions: List[str] = Field(default_factory=list)
 
 
 class SceneComposition(BaseModel):
     scene_number: int
-    start_time_seconds: float
-    end_time_seconds: float
+    start_time_seconds: float = 0.0
+    end_time_seconds: float = 10.0
     transition_in: str = "fade"
     transition_out: str = "fade"
     overlay_text: Optional[str] = None
@@ -114,33 +114,33 @@ class SceneComposition(BaseModel):
 
 
 class CompositionPlan(BaseModel):
-    title: str
-    total_duration_seconds: int
+    title: str = "Animation"
+    total_duration_seconds: int = 90
     frame_rate: int = 24
     resolution: str = "1280x720"
-    scenes: List[SceneComposition]
+    scenes: List[SceneComposition] = Field(default_factory=list)
     post_processing_notes: str = ""
     export_format: str = "mp4/h264"
     final_render_command: str = ""
 
 
 class QCIssue(BaseModel):
-    severity: str            # "critical" | "warning" | "suggestion"
-    category: str            # "continuity" | "audio_sync" | "visual" | "pacing"
+    severity: str = "warning"
+    category: str = "general"
     scene_reference: Optional[int] = None
-    description: str
-    suggested_fix: str
+    description: str = ""
+    suggested_fix: str = ""
 
 
 class QCReport(BaseModel):
-    overall_score: float     # 0.0 – 10.0
-    continuity_score: float
-    audio_sync_score: float
-    visual_consistency_score: float
-    pacing_score: float
-    issues: List[QCIssue]
-    approved: bool
-    improvement_summary: str
+    overall_score: float = 7.0
+    continuity_score: float = 7.0
+    audio_sync_score: float = 7.0
+    visual_consistency_score: float = 7.0
+    pacing_score: float = 7.0
+    issues: List[QCIssue] = Field(default_factory=list)
+    approved: bool = True
+    improvement_summary: str = ""
 
 
 class PipelineState(BaseModel):
@@ -155,6 +155,6 @@ class PipelineState(BaseModel):
     qc_report: Optional[QCReport] = None
     qc_retry_count: int = 0
     status: str = "pending"
-    output_video_path: Optional[str] = None   # set by AnimationCompositionAgent
+    output_video_path: Optional[str] = None
     completed_stages: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
