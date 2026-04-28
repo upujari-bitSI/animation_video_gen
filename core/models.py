@@ -1,160 +1,209 @@
 from __future__ import annotations
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, List, Optional
+from pydantic import BaseModel, BeforeValidator, Field
 
+
+# ── Flexible coercion helpers ─────────────────────────────────────────────────
+# llama3 sometimes returns [] or null for string fields, or a string for list
+# fields. These validators silently coerce whatever the LLM returns.
+
+def _to_str(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, list):
+        return " ".join(str(i) for i in v if i is not None)
+    return str(v)
+
+def _to_str_list(v: Any) -> List[str]:
+    if v is None:
+        return []
+    if isinstance(v, str):
+        return [v] if v.strip() else []
+    if isinstance(v, list):
+        return [str(i) for i in v if i is not None]
+    return []
+
+def _to_int(v: Any) -> int:
+    try:
+        return int(v) if v is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+def _to_float(v: Any) -> float:
+    try:
+        return float(v) if v is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+def _to_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no", "")
+    return bool(v)
+
+# Annotated types — drop-in replacements for str / int / float / bool / List[str]
+FlexStr      = Annotated[str,       BeforeValidator(_to_str)]
+FlexInt      = Annotated[int,       BeforeValidator(_to_int)]
+FlexFloat    = Annotated[float,     BeforeValidator(_to_float)]
+FlexBool     = Annotated[bool,      BeforeValidator(_to_bool)]
+FlexStrList  = Annotated[List[str], BeforeValidator(_to_str_list)]
+
+
+# ── Data models ───────────────────────────────────────────────────────────────
 
 class Character(BaseModel):
-    name: str = "Unknown"
-    description: str = ""
-    personality: str = ""
-    visual_traits: str = ""
+    name:         FlexStr = "Unknown"
+    description:  FlexStr = ""
+    personality:  FlexStr = ""
+    visual_traits: FlexStr = ""
 
 
 class StructuredPrompt(BaseModel):
-    genre: str = "adventure"
-    tone: str = "uplifting"
-    mood: str = "hopeful"
-    target_audience: str = "general"
-    animation_style: str = "cartoon"
-    duration_seconds: int = 90
-    characters: List[Character] = Field(default_factory=list)
-    setting: str = ""
-    themes: List[str] = Field(default_factory=list)
-    pacing: str = "moderate"
+    genre:            FlexStr    = "adventure"
+    tone:             FlexStr    = "uplifting"
+    mood:             FlexStr    = "hopeful"
+    target_audience:  FlexStr    = "general"
+    animation_style:  FlexStr    = "cartoon"
+    duration_seconds: FlexInt    = 90
+    characters:       List[Character] = Field(default_factory=list)
+    setting:          FlexStr    = ""
+    themes:           FlexStrList = Field(default_factory=list)
+    pacing:           FlexStr    = "moderate"
 
 
 class StoryScript(BaseModel):
-    title: str = "Untitled"
-    beginning: str = ""
-    conflict: str = ""
-    resolution: str = ""
-    full_narrative: str = ""
-    emotional_arc: str = ""
-    word_count: int = 0
+    title:          FlexStr = "Untitled"
+    beginning:      FlexStr = ""
+    conflict:       FlexStr = ""
+    resolution:     FlexStr = ""
+    full_narrative: FlexStr = ""
+    emotional_arc:  FlexStr = ""
+    word_count:     FlexInt = 0
 
 
 class Scene(BaseModel):
-    scene_number: int
-    title: str = ""
-    duration_seconds: int = 10
-    description: str = ""
-    characters_present: List[str] = Field(default_factory=list)
-    actions: str = ""
-    camera_angle: str = "medium shot"
-    setting: str = ""
-    mood: str = "neutral"
-    dialogue: Optional[str] = None
+    scene_number:       FlexInt     = 0
+    title:              FlexStr     = ""
+    duration_seconds:   FlexInt     = 10
+    description:        FlexStr     = ""
+    characters_present: FlexStrList = Field(default_factory=list)
+    actions:            FlexStr     = ""
+    camera_angle:       FlexStr     = "medium shot"
+    setting:            FlexStr     = ""
+    mood:               FlexStr     = "neutral"
+    dialogue:           Optional[FlexStr] = None
 
 
 class SceneBreakdown(BaseModel):
-    total_scenes: int = 0
-    total_duration_seconds: int = 0
+    total_scenes:           FlexInt = 0
+    total_duration_seconds: FlexInt = 0
     scenes: List[Scene] = Field(default_factory=list)
 
 
 class VisualPrompt(BaseModel):
-    scene_number: int
-    image_generation_prompt: str = ""
-    style_notes: str = ""
-    lighting: str = "natural lighting"
-    color_palette: str = "vibrant"
-    character_consistency_notes: str = ""
-    environment_details: str = ""
+    scene_number:               FlexInt = 0
+    image_generation_prompt:    FlexStr = ""
+    style_notes:                FlexStr = ""
+    lighting:                   FlexStr = "natural lighting"
+    color_palette:              FlexStr = "vibrant"
+    character_consistency_notes: FlexStr = ""
+    environment_details:        FlexStr = ""
 
 
 class VisualPromptPack(BaseModel):
-    animation_style: str = "cartoon"
-    global_style_guide: str = ""
+    animation_style:   FlexStr = "cartoon"
+    global_style_guide: FlexStr = ""
     prompts: List[VisualPrompt] = Field(default_factory=list)
 
 
 class GeneratedAsset(BaseModel):
-    scene_number: int
-    asset_type: str = "image"
-    file_path: str = ""
-    generation_model: str = ""
-    prompt_used: str = ""
-    status: str = "stub"
-    notes: str = ""
+    scene_number:    FlexInt = 0
+    asset_type:      FlexStr = "image"
+    file_path:       FlexStr = ""
+    generation_model: FlexStr = ""
+    prompt_used:     FlexStr = ""
+    status:          FlexStr = "stub"
+    notes:           FlexStr = ""
 
 
 class GeneratedAssetPack(BaseModel):
     assets: List[GeneratedAsset] = Field(default_factory=list)
-    total_scenes: int = 0
-    generation_summary: str = ""
+    total_scenes:       FlexInt = 0
+    generation_summary: FlexStr = ""
 
 
 class AudioCue(BaseModel):
-    scene_number: int
-    narration_text: str = ""
-    voice_style: str = "neutral"
-    timing_start_seconds: float = 0.0
-    timing_end_seconds: float = 5.0
-    sound_effects: List[str] = Field(default_factory=list)
-    audio_file_path: Optional[str] = None
+    scene_number:          FlexInt   = 0
+    narration_text:        FlexStr   = ""
+    voice_style:           FlexStr   = "neutral"
+    timing_start_seconds:  FlexFloat = 0.0
+    timing_end_seconds:    FlexFloat = 5.0
+    sound_effects:         FlexStrList = Field(default_factory=list)
+    audio_file_path:       Optional[str] = None
 
 
 class AudioPlan(BaseModel):
-    narrator_voice: str = "neutral"
-    background_music_genre: str = "ambient"
-    background_music_tempo: str = "moderate"
-    overall_audio_style: str = ""
+    narrator_voice:          FlexStr     = "neutral"
+    background_music_genre:  FlexStr     = "ambient"
+    background_music_tempo:  FlexStr     = "moderate"
+    overall_audio_style:     FlexStr     = ""
     audio_cues: List[AudioCue] = Field(default_factory=list)
-    music_transitions: List[str] = Field(default_factory=list)
+    music_transitions: FlexStrList = Field(default_factory=list)
 
 
 class SceneComposition(BaseModel):
-    scene_number: int
-    start_time_seconds: float = 0.0
-    end_time_seconds: float = 10.0
-    transition_in: str = "fade"
-    transition_out: str = "fade"
-    overlay_text: Optional[str] = None
-    audio_sync_notes: str = ""
+    scene_number:        FlexInt   = 0
+    start_time_seconds:  FlexFloat = 0.0
+    end_time_seconds:    FlexFloat = 10.0
+    transition_in:       FlexStr   = "fade"
+    transition_out:      FlexStr   = "fade"
+    overlay_text:        Optional[FlexStr] = None
+    audio_sync_notes:    FlexStr   = ""
 
 
 class CompositionPlan(BaseModel):
-    title: str = "Animation"
-    total_duration_seconds: int = 90
-    frame_rate: int = 24
-    resolution: str = "1280x720"
+    title:                  FlexStr = "Animation"
+    total_duration_seconds: FlexInt = 90
+    frame_rate:             FlexInt = 24
+    resolution:             FlexStr = "1280x720"
     scenes: List[SceneComposition] = Field(default_factory=list)
-    post_processing_notes: str = ""
-    export_format: str = "mp4/h264"
-    final_render_command: str = ""
+    post_processing_notes:  FlexStr = ""
+    export_format:          FlexStr = "mp4/h264"
+    final_render_command:   FlexStr = ""
 
 
 class QCIssue(BaseModel):
-    severity: str = "warning"
-    category: str = "general"
-    scene_reference: Optional[int] = None
-    description: str = ""
-    suggested_fix: str = ""
+    severity:        FlexStr = "warning"
+    category:        FlexStr = "general"
+    scene_reference: Optional[FlexInt] = None
+    description:     FlexStr = ""
+    suggested_fix:   FlexStr = ""
 
 
 class QCReport(BaseModel):
-    overall_score: float = 7.0
-    continuity_score: float = 7.0
-    audio_sync_score: float = 7.0
-    visual_consistency_score: float = 7.0
-    pacing_score: float = 7.0
+    overall_score:              FlexFloat = 7.0
+    continuity_score:           FlexFloat = 7.0
+    audio_sync_score:           FlexFloat = 7.0
+    visual_consistency_score:   FlexFloat = 7.0
+    pacing_score:               FlexFloat = 7.0
     issues: List[QCIssue] = Field(default_factory=list)
-    approved: bool = True
-    improvement_summary: str = ""
+    approved:            FlexBool = True
+    improvement_summary: FlexStr  = ""
 
 
 class PipelineState(BaseModel):
-    user_prompt: str
-    structured_prompt: Optional[StructuredPrompt] = None
-    story_script: Optional[StoryScript] = None
-    scene_breakdown: Optional[SceneBreakdown] = None
-    visual_prompt_pack: Optional[VisualPromptPack] = None
+    user_prompt:         str
+    structured_prompt:   Optional[StructuredPrompt]   = None
+    story_script:        Optional[StoryScript]         = None
+    scene_breakdown:     Optional[SceneBreakdown]      = None
+    visual_prompt_pack:  Optional[VisualPromptPack]    = None
     generated_asset_pack: Optional[GeneratedAssetPack] = None
-    audio_plan: Optional[AudioPlan] = None
-    composition_plan: Optional[CompositionPlan] = None
-    qc_report: Optional[QCReport] = None
-    qc_retry_count: int = 0
-    status: str = "pending"
-    output_video_path: Optional[str] = None
-    completed_stages: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
+    audio_plan:          Optional[AudioPlan]           = None
+    composition_plan:    Optional[CompositionPlan]     = None
+    qc_report:           Optional[QCReport]            = None
+    qc_retry_count:      int = 0
+    status:              str = "pending"
+    output_video_path:   Optional[str] = None
+    completed_stages:    List[str] = Field(default_factory=list)
+    errors:              List[str] = Field(default_factory=list)
