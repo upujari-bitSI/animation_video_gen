@@ -107,21 +107,21 @@ class SceneComposition(BaseModel):
     scene_number: int
     start_time_seconds: float
     end_time_seconds: float
-    transition_in: str
-    transition_out: str
+    transition_in: str = "fade"
+    transition_out: str = "fade"
     overlay_text: Optional[str] = None
-    audio_sync_notes: str
+    audio_sync_notes: str = ""
 
 
 class CompositionPlan(BaseModel):
     title: str
     total_duration_seconds: int
-    frame_rate: int
-    resolution: str
+    frame_rate: int = 24
+    resolution: str = "1280x720"
     scenes: List[SceneComposition]
-    post_processing_notes: str
-    export_format: str
-    final_render_command: str
+    post_processing_notes: str = ""
+    export_format: str = "mp4/h264"
+    final_render_command: str = ""
 
 
 class QCIssue(BaseModel):
